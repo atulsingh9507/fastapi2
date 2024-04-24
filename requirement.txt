@@ -1,6 +1,0 @@
-fastapi
-uvicorn
-passlib
-bycrypt
-sqlalchemy
-jwt
