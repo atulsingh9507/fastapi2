@@ -41,7 +41,7 @@ def create_access_token(user_id: int):
 def create_user(user: schema.UserCreate, db: Session = Depends(get_db)):
     hashed_password = Hash.bcrypt(user.password)
      
-    db_user = model.User(username=user.username, password=hashed_password, email=user.email)  # Passing email from request
+    db_user = model.User(username=user.username, hashed_password=hashed_password, email=user.email) # Passing email from request
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
@@ -52,7 +52,7 @@ def create_user(user: schema.UserCreate, db: Session = Depends(get_db)):
 @app.post("/login/")
 def login(username: str, password: str, response: Response, db: Session = Depends(get_db)):
     user = db.query(model.User).filter(model.User.username == username).first()
-    if not user or not Hash.verify(user.password, password):
+    if not user or not Hash.verify(user.hashed_password, password):  # Verify hashed password
         raise HTTPException(status_code=401, detail="Incorrect username or password")
     
     # Generate JWT token with user ID
@@ -64,6 +64,8 @@ def login(username: str, password: str, response: Response, db: Session = Depend
     return {"access_token": access_token, "token_type": "bearer"}
 
 # Logout endpoint
+
+
 @app.post("/logout/")
 def logout(response: Response, access_token: str = Cookie(None)):
     if access_token is None:
@@ -84,6 +86,8 @@ def logout(response: Response, access_token: str = Cookie(None)):
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
+
+# Change password endpoint with JWT token authentication
 # Change password endpoint with JWT token authentication
 @app.put("/change-password/")
 def change_password(new_password: str, response: Response, access_token: str = Header(None), db: Session = Depends(get_db)):
@@ -92,12 +96,12 @@ def change_password(new_password: str, response: Response, access_token: str = H
     
     try:
         token_data = jwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM])
-        username = token_data.get("sub")
-        if not username:
+        user_id = token_data.get("sub")  # Extract user ID from the token
+        if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
         
-        # Find user by username
-        user = db.query(model.User).filter(model.User.username == username).first()
+        # Find user by user ID
+        user = db.query(model.User).filter(model.User.id == user_id).first()
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
         
@@ -105,7 +109,7 @@ def change_password(new_password: str, response: Response, access_token: str = H
         hashed_password = Hash.bcrypt(new_password)
         
         # Update user's password
-        user.password = hashed_password
+        user.hashed_password = hashed_password  # Modify hashed_password attribute
         db.commit()
         
         return {"message": "Password changed successfully"}
